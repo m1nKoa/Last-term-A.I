@@ -2,15 +2,29 @@ import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
+from sklearn.metrics import classification_report
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense
 from tensorflow.keras.utils import to_categorical
 import joblib
-data = pd.read_csv('/content/thoitrang.csv')
+
+# Load the data
+data_path = '/content/thoitrang.csv'
+data = pd.read_csv(data_path)
 print(data.columns)
-data.dropna(inplace=True) 
+data.dropna(inplace=True)  # Ensuring no missing values
+data.reset_index(drop=True, inplace=True)
 
 def classify_clothing(row):
+    """
+    Determines clothing recommendations based on physical measurements and gender.
+
+    Args:
+    row (pd.Series): A row from DataFrame with necessary features.
+
+    Returns:
+    list: Top 3 clothing recommendations.
+    """
     scores = {}
     gender = 'Nam' if row['Gender'] == 1 else 'Nữ'
     clothing_options = {
@@ -27,40 +41,32 @@ def classify_clothing(row):
             'Áo blouse lụa': 2 if row['ChestWidth'] < 85 else 1,
             'Đầm maxi': 3 if row['TotalHeight'] > 170 else 1,
             'Đầm dạ hội': 4 if row['Waist'] < 65 and row['TotalHeight'] > 165 else 0 
-        },
-        'Unisex': {
-            'Quần short': 2 if row['Waist'] < 75 else 1,
-            'Hoodie': 3 if row['TotalHeight'] > 170 else 1,
-            'Quần jogger': 2 if 75 <= row['Waist'] < 85 else 1,
-            'Áo thun dài tay': 2 if row['TotalHeight'] < 165 else 1
         }
     }
 
-    scores.update(clothing_options['Unisex'])
     scores.update(clothing_options[gender])
 
-    if row['Waist'] > 85 and row['Hips'] > 100:
-        scores['Quần suông'] = scores.get('Quần suông', 0) + 3
-        scores['Quần dài ống suông'] = scores.get('Quần dài ống suông', 0) + 2
+    # Add Unisex options to scores
+    unisex_options = {
+        'Quần short': 2 if row['Waist'] < 75 else 1,
+        'Hoodie': 3 if row['TotalHeight'] > 170 else 1,
+        'Quần jogger': 2 if 75 <= row['Waist'] < 85 else 1,
+        'Áo thun dài tay': 2 if row['TotalHeight'] < 165 else 1
+    }
+    scores.update(unisex_options)
 
-    if row['ChestWidth'] > 90 and gender == 'Nữ': 
-        scores['Áo len'] = scores.get('Áo len', 0) + 2
+    scores['Quần suông'] = scores.get('Quần suông', 0) + 3 if row['Waist'] > 85 and row['Hips'] > 100 else scores.get('Quần suông', 0)
+    scores['Quần dài ống suông'] = scores.get('Quần dài ống suông', 0) + 2 if row['Waist'] > 85 and row['Hips'] > 100 else scores.get('Quần dài ống suông', 0)
+    scores['Áo len'] = scores.get('Áo len', 0) + 2 if row['ChestWidth'] > 90 and gender == 'Nữ' else scores.get('Áo len', 0)
+    scores['Đầm xòe'] = scores.get('Đầm xòe', 0) + 2 if row['TotalHeight'] < 160 else scores.get('Đầm xòe', 0)
+    scores['Váy ngắn rộng'] = scores.get('Váy ngắn rộng', 0) + 2 if row['TotalHeight'] < 160 else scores.get('Váy ngắn rộng', 0)
+    scores['Áo tank top'] = scores.get('Áo tank top', 0) + 2 if row['ShoulderWidth'] > 50 and gender == 'Nam' else scores.get('Áo tank top', 0)
+    scores['Đầm dạ hội'] = scores.get('Đầm dạ hội', 0) + 4 if row['TotalHeight'] > 175 and row['Waist'] < 70 and gender == 'Nữ' else scores.get('Đầm dạ hội', 0)
 
-    if row['TotalHeight'] < 160:
-        scores['Đầm xòe'] = scores.get('Đầm xòe', 0) + 2 
-        scores['Váy ngắn rộng'] = scores.get('Váy ngắn rộng', 0) + 2
-
-    if row['ShoulderWidth'] > 50 and gender == 'Nam':
-        scores['Áo tank top'] = scores.get('Áo tank top', 0) + 2
-
-
-    if row['TotalHeight'] > 175 and row['Waist'] < 70 and gender == 'Nữ':
-        scores['Đầm dạ hội'] = scores.get('Đầm dạ hội', 0) + 4
-
+    # Sort items based on scores and return the top 3
     sorted_items = sorted(scores.items(), key=lambda item: item[1], reverse=True)
-    top_clothing = [item[0] for item in sorted_items[:3]]
-
-    return top_clothing
+    return [item[0] for item in sorted_items[:3]]
+    pass
 
 data['RecommendedClothing'] = data.apply(lambda row: classify_clothing(row)[0], axis=1)
 
